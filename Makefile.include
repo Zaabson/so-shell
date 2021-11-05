@@ -78,6 +78,10 @@ endif
 	@echo "[LD] $@ <- $^"
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
+%.so: %.c
+	@echo "[CC] $@ <- $<"
+	$(CC) -shared -fpic $(CFLAGS) -o $@ $< -ldl
+
 clean:
 	rm -vf $(PROGS) $(OBJECTS) $(DEPFILES) $(LIB)
 	rm -vf $(shell find -L . -iname '*~')

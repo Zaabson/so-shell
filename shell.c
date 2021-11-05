@@ -1,5 +1,7 @@
+#ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#endif
 
 #define DEBUG 0
 #include "shell.h"
@@ -29,8 +31,10 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
 
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
+#ifdef STUDENT
     (void)mode;
     (void)MaybeClose;
+#endif /* !STUDENT */
   }
 
   token[n] = NULL;
@@ -54,6 +58,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
 
   /* TODO: Start a subprocess, create a job and monitor it. */
+#ifdef STUDENT
+#endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
   return exitcode;
@@ -70,6 +76,8 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
 
   /* TODO: Start a subprocess and make sure it's moved to a process group. */
   pid_t pid = Fork();
+#ifdef STUDENT
+#endif /* !STUDENT */
 
   return pid;
 }
@@ -99,11 +107,13 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
 
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
+#ifdef STUDENT
   (void)input;
   (void)job;
   (void)pid;
   (void)pgid;
   (void)do_stage;
+#endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
   return exitcode;
@@ -137,8 +147,36 @@ static void eval(char *cmdline) {
   free(token);
 }
 
+#ifndef READLINE
+static char *readline(const char *prompt) {
+  char *line = Malloc(MAXLINE);
+  int len, res;
+
+  write(STDOUT_FILENO, prompt, strlen(prompt));
+
+  for (len = 0; len < MAXLINE; len++) {
+    if (!(res = Read(STDIN_FILENO, line + len, 1)))
+      break;
+
+    if (line[len] == '\n') {
+      line[len] = '\0';
+      break;
+    }
+  }
+
+  if (len == 0) {
+    free(line);
+    return NULL;
+  }
+
+  return line;
+}
+#endif
+
 int main(int argc, char *argv[]) {
+#ifdef READLINE
   rl_initialize();
+#endif
 
   sigemptyset(&sigchld_mask);
   sigaddset(&sigchld_mask, SIGCHLD);
@@ -166,7 +204,9 @@ int main(int argc, char *argv[]) {
       break;
 
     if (strlen(line)) {
+#ifdef READLINE
       add_history(line);
+#endif
       eval(line);
     }
     free(line);

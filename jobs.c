@@ -26,8 +26,10 @@ static void sigchld_handler(int sig) {
   int status;
   /* TODO: Change state (FINISHED, RUNNING, STOPPED) of processes and jobs.
    * Bury all children that finished saving their status in jobs. */
+#ifdef STUDENT
   (void)status;
   (void)pid;
+#endif /* !STUDENT */
   errno = old_errno;
 }
 
@@ -114,7 +116,9 @@ int jobstate(int j, int *statusp) {
   int state = job->state;
 
   /* TODO: Handle case where job has finished. */
+#ifdef STUDENT
   (void)exitcode;
+#endif /* !STUDENT */
 
   return state;
 }
@@ -136,8 +140,10 @@ bool resumejob(int j, int bg, sigset_t *mask) {
   if (j >= njobmax || jobs[j].state == FINISHED)
     return false;
 
-  /* TODO: Continue stopped job. Possibly move job to foreground slot. */
+    /* TODO: Continue stopped job. Possibly move job to foreground slot. */
+#ifdef STUDENT
   (void)movejob;
+#endif /* !STUDENT */
 
   return true;
 }
@@ -149,6 +155,8 @@ bool killjob(int j) {
   debug("[%d] killing '%s'\n", j, jobs[j].command);
 
   /* TODO: I love the smell of napalm in the morning. */
+#ifdef STUDENT
+#endif /* !STUDENT */
 
   return true;
 }
@@ -159,8 +167,10 @@ void watchjobs(int which) {
     if (jobs[j].pgid == 0)
       continue;
 
-    /* TODO: Report job number, state, command and exit code or signal. */
+      /* TODO: Report job number, state, command and exit code or signal. */
+#ifdef STUDENT
     (void)deljob;
+#endif /* !STUDENT */
   }
 }
 
@@ -170,8 +180,10 @@ int monitorjob(sigset_t *mask) {
   int exitcode = 0, state;
 
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
+#ifdef STUDENT
   (void)exitcode;
   (void)state;
+#endif /* !STUDENT */
 
   return exitcode;
 }
@@ -200,6 +212,8 @@ void shutdownjobs(void) {
   Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
 
   /* TODO: Kill remaining jobs and wait for them to finish. */
+#ifdef STUDENT
+#endif /* !STUDENT */
 
   watchjobs(FINISHED);
 

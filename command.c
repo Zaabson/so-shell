@@ -112,6 +112,8 @@ noreturn void external_command(char **argv) {
 
   if (!index(argv[0], '/') && path) {
     /* TODO: For all paths in PATH construct an absolute path and execve it. */
+#ifdef STUDENT
+#endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);
   }

@@ -9,6 +9,8 @@ jobs:
     container: cahirwpz/ii-so:latest
     steps:
       - uses: actions/checkout@v2
-      - name: Run clang-format
+      - name: Check code formatting
         run: ./run-clang-format.sh
+      - name: Check for unauthorized modifications
+        run: ./check-files.py
       - uses: education/autograding@v1

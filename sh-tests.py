@@ -8,12 +8,14 @@ import pexpect
 import unittest
 import random
 import time
+import sys
 from tempfile import NamedTemporaryFile
 
 
 class ShellTesterSimple():
     def setUp(self):
         self.child = pexpect.spawn('./shell')
+        # self.child.logfile = sys.stdout.buffer
         self.child.setecho(False)
         # self.child.interact()
         self.expect('#')
@@ -27,6 +29,9 @@ class ShellTesterSimple():
         return [line.strip()
                 for line in self.child.after.decode('utf-8').split('\r\n')
                 if len(line)]
+
+    def send(self, s):
+        self.child.send(s)
 
     def sendline(self, s):
         self.child.sendline(s)
@@ -321,7 +326,7 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         stty_before = self.stty()
         self.sendline('more shell.c')
         child = self.expect_spawn()['retval']
-        self.sendline('q')
+        self.send('q')
         self.expect_waitpid(pid=child, status=0)
         self.expect('#')
         stty_after = self.stty()
@@ -333,7 +338,7 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         child = self.expect_spawn()['retval']
         time.sleep(0.25)
         self.sendcontrol('z')
-        self.expect_waitpid(pid=child, status='SIGTSTP')
+        self.expect_waitpid(pid=child, status='SIGSTOP')
         self.sendline('kill %1')
         self.expect_waitpid(pid=child, status='SIGTERM')
         self.sendline('jobs')
