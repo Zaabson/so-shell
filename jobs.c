@@ -110,7 +110,7 @@ void addproc(int j, pid_t pid, char **argv) {
 
 /* Returns job's state.
  * If it's finished, delete it and return exitcode through statusp. */
-int jobstate(int j, int *statusp) {
+static int jobstate(int j, int *statusp) {
   assert(j < njobmax);
   job_t *job = &jobs[j];
   int state = job->state;
@@ -181,6 +181,7 @@ int monitorjob(sigset_t *mask) {
 
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
 #ifdef STUDENT
+  (void)jobstate;
   (void)exitcode;
   (void)state;
 #endif /* !STUDENT */

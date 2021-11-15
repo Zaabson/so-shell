@@ -50,7 +50,6 @@ int addjob(pid_t pgid, int bg);
 void addproc(int job, pid_t pid, char **argv);
 bool killjob(int job);
 void watchjobs(int state);
-int jobstate(int job, int *exitcodep);
 char *jobcmd(int job);
 bool resumejob(int job, int bg, sigset_t *mask);
 int monitorjob(sigset_t *mask);

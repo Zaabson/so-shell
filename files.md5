@@ -69,12 +69,12 @@ d73e0e55f2a67cf5b0d06c0bdc46a53b  libcsapp/Waitpid.c
 862dc92753b807b5fab203942c271a57  libcsapp/Write.c
 890a936e8c42ec09891685b5bc14a9ed  libcsapp/Writev.c
 67f915b143d03c1c3b8c09dbaf46eda1  command.c
-4175f099052760bfceff859b249f0ffa  jobs.c
+735b5aab18c7db6cfef620092e6f3a18  jobs.c
 14544aaf7c3ef7bfc18f4517a4af60e6  lexer.c
 2e5362a43fd0c3c7bda90e7f5f0bbaca  Makefile
 0e64f86947504e65f060189b8653139d  Makefile.include
 bcfc4f95ca76a6f421b9457984146a84  run-clang-format.sh
 46ca18a90becd39b9272f0b9f1cb9b8d  shell.c
-9e6f21551b5f3f437608f1d15878a166  shell.h
+4b8571a1123fe082f04ef805ddb8bff2  shell.h
 77f0fcd9a152e5e58443fc35a1829801  sh-tests.py
 43eca75c03f44eebaadcf8e916ef5928  trace.c
