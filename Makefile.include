@@ -82,11 +82,15 @@ endif
 	@echo "[CC] $@ <- $<"
 	$(CC) -shared -fpic $(CFLAGS) -o $@ $< -ldl
 
+tags:
+	@echo "[CTAGS] Rebuilding tags database..."
+	ctags $(LIBSRC_C) $(SRC_C) $(SRC_H)
+
 clean:
 	rm -vf $(PROGS) $(OBJECTS) $(DEPFILES) $(LIB)
 	rm -vf $(shell find -L . -iname '*~')
 	rm -vf $(ARCHIVE).tar.gz
-	rm -vrf $(EXTRA-CLEAN) *.dSYM
+	rm -vrf $(EXTRA-CLEAN) tags *.dSYM
 
 format:
 	clang-format --style=file -i $(LIBSRC_C) $(LIBSRC_H) $(SRC_C) $(SRC_H)

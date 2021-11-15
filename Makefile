@@ -1,4 +1,5 @@
 PROGS = shell trace.so
+EXTRA-CLEAN = sh-tests.*.log
 
 include Makefile.include
 

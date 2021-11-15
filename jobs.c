@@ -221,3 +221,8 @@ void shutdownjobs(void) {
 
   Close(tty_fd);
 }
+
+/* Sets foreground process group to `pgid`. */
+void setfgpgrp(pid_t pgid) {
+  Tcsetpgrp(tty_fd, pgid);
+}

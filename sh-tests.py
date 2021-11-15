@@ -12,13 +12,22 @@ import sys
 from tempfile import NamedTemporaryFile
 
 
+LOGFILE = 'sh-tests.{}.log'.format(os.getpid())
+
+
 class ShellTesterSimple():
     def setUp(self):
+        test_id = '.'.join(self.id().split('.')[-2:])
         self.child = pexpect.spawn('./shell')
-        # self.child.logfile = sys.stdout.buffer
+        self.child.logfile = open(LOGFILE, 'ab')
+        self.child.logfile.write(f'>>> Test: "{test_id}"\n'.encode('utf-8'))
         self.child.setecho(False)
         # self.child.interact()
         self.expect('#')
+
+    def tearDown(self):
+        self.sendline('exit\n')
+        self.child.logfile.close()
 
     def lines_before(self):
         return [line.strip()
@@ -42,11 +51,11 @@ class ShellTesterSimple():
     def sendcontrol(self, ch):
         self.child.sendcontrol(ch)
 
-    def expect(self, s):
-        self.child.expect(s)
+    def expect(self, s, **kw):
+        self.child.expect(s, **kw)
 
-    def expect_exact(self, s):
-        self.child.expect_exact(s)
+    def expect_exact(self, s, **kw):
+        self.child.expect_exact(s, **kw)
 
     @property
     def pid(self):
@@ -64,12 +73,11 @@ class ShellTesterSimple():
 class ShellTester(ShellTesterSimple):
     def setUp(self):
         os.environ['LD_PRELOAD'] = './trace.so'
-        self.child = pexpect.spawn('./shell')
-        self.child.setecho(False)
-        self.expect('#')
+        super().setUp()
 
     def tearDown(self):
         del os.environ['LD_PRELOAD']
+        super().tearDown()
 
     def expect_syscall(self, name, caller=None):
         self.expect('\[(\d+):(\d+)\] %s\(([^)]*)\)([^\r]*)\r\n' % name)
@@ -113,6 +121,12 @@ class ShellTester(ShellTesterSimple):
 
     def expect_execve(self, child=None):
         return self.expect_syscall('execve', caller=child)
+
+    def expect_kill(self, pid=None, signum=None):
+        while True:
+            res = self.expect_syscall('kill', caller=self.pid)
+            if res['args'][0] == pid and res['args'][1] == signum:
+                break
 
     def expect_waitpid(self, pid=None, status=None):
         while True:
@@ -187,13 +201,13 @@ class TestShellSimple(ShellTesterSimple, unittest.TestCase):
         self.assertEqual(len(lines), 5)
         self.assertIn('pipe:', lines[2])
 
-        # 'echo test | ls -l /proc/self/fd'
-        lines = self.execute('echo test | ls -l /proc/self/fd')
+        # 'true | ls -l /proc/self/fd'
+        lines = self.execute('true | ls -l /proc/self/fd')
         self.assertEqual(len(lines), 5)
         self.assertIn('pipe:', lines[1])
 
-        # 'echo test | ls -l /proc/self/fd | cat'
-        lines = self.execute('echo test | ls -l /proc/self/fd | cat')
+        # 'true | ls -l /proc/self/fd | cat'
+        lines = self.execute('true | ls -l /proc/self/fd | cat')
         self.assertEqual(len(lines), 5)
         self.assertIn('pipe:', lines[1])
         self.assertIn('pipe:', lines[2])
@@ -232,16 +246,23 @@ class TestShellSimple(ShellTesterSimple, unittest.TestCase):
         self.sendline('pkill -9 cat')
         self.expect_exact("killed 'cat' by signal 9")
 
-    def test_resume_suspended(self):
-        self.sendline('cat &')
-        self.expect_exact("running 'cat'")
+    def _test_resume_suspended(self, prog):
+        self.sendline(f'{prog} &')
+        self.expect_exact(f"running '{prog}'")
+        self.expect('#')
         self.sendline('jobs')
-        self.expect_exact("suspended 'cat'")
+        self.expect_exact(f"suspended '{prog}'")
         self.sendline('fg')
-        self.expect_exact("continue 'cat'")
+        self.expect_exact(f"continue '{prog}'")
         self.sendintr()
         self.sendline('jobs')
-        # expect something ?
+        self.expect('#', searchwindowsize=2)
+
+    def test_resume_suspended(self):
+        self._test_resume_suspended('cat')
+
+    def test_resume_suspended_pipe(self):
+        self._test_resume_suspended('cat | cat')
 
     def test_kill_jobs(self):
         self.sendline('sleep 1000 &')
@@ -283,7 +304,7 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         self.wait()
 
     def test_sigint(self):
-        self.sendline('sleep 10')
+        self.sendline('cat')
         child = self.expect_spawn()['retval']
         self.sendintr()
         self.expect_waitpid(pid=child, status='SIGINT')
@@ -305,8 +326,7 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         self.sendcontrol('z')
         self.expect_waitpid(pid=child, status='SIGTSTP')
         self.sendline('kill %1')
-        time.sleep(0.1)
-        self.expect_waitpid(pid=child, status='SIGCONT')
+        self.expect_kill(pid=-child, signum='SIGCONT')
         self.expect_waitpid(pid=child, status='SIGTERM')
         self.sendline('jobs')
         self.expect_exact("[1] killed 'cat' by signal 15")
@@ -316,8 +336,7 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         child = self.expect_spawn()['retval']
         self.expect_waitpid(pid=child, status='SIGTTIN')
         self.sendline('kill %1')
-        time.sleep(0.1)
-        self.expect_waitpid(pid=child, status='SIGCONT')
+        self.expect_kill(pid=-child, signum='SIGCONT')
         self.expect_waitpid(pid=child, status='SIGTERM')
         self.sendline('jobs')
         self.expect_exact("[1] killed 'cat' by signal 15")
@@ -333,16 +352,17 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
         self.assertEqual(stty_before, stty_after)
 
     def test_termattr_2(self):
+        prog = 'more shell.c'
         stty_before = self.stty()
-        self.sendline('more shell.c')
+        self.sendline(prog)
         child = self.expect_spawn()['retval']
-        time.sleep(0.25)
+        self.expect('--More--')
         self.sendcontrol('z')
         self.expect_waitpid(pid=child, status='SIGSTOP')
         self.sendline('kill %1')
         self.expect_waitpid(pid=child, status='SIGTERM')
         self.sendline('jobs')
-        self.expect_exact("[1] killed 'more shell.c' by signal 15")
+        self.expect_exact(f"[1] killed '{prog}' by signal 15")
         stty_after = self.stty()
         self.assertEqual(stty_before, stty_after)
 
@@ -351,4 +371,10 @@ if __name__ == '__main__':
     os.environ['PATH'] = '/usr/bin:/bin'
     os.environ['LC_ALL'] = 'C'
 
-    unittest.main()
+    with open(LOGFILE, 'wb') as f:
+        f.truncate()
+
+    try:
+        unittest.main()
+    finally:
+        print(f'\nTest results were saved to "{LOGFILE}".')

@@ -68,7 +68,7 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 /* Start internal or external command in a subprocess that belongs to pipeline.
  * All subprocesses in pipeline must belong to the same process group. */
 static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
-                      token_t *token, int ntokens) {
+                      token_t *token, int ntokens, bool bg) {
   ntokens = do_redir(token, ntokens, &input, &output);
 
   if (ntokens == 0)
@@ -160,7 +160,7 @@ static char *readline(const char *prompt) {
 
     if (line[len] == '\n') {
       line[len] = '\0';
-      break;
+      return line;
     }
   }
 
