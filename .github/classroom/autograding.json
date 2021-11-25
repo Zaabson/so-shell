@@ -11,11 +11,19 @@
     },
     {
       "name": "Run tests",
+<<<<<<< HEAD
       "run": "timeout -v 5m make test",
       "input": "",
       "output": "",
       "comparison": "included",
       "timeout": 5,
+=======
+      "run": "make test",
+      "input": "",
+      "output": "",
+      "comparison": "included",
+      "timeout": 10,
+>>>>>>> 4b40fb6 (Initial commit)
       "points": 1
     }
   ]
