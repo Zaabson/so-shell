@@ -66,7 +66,8 @@
 
 extern char **environ;
 
-/* Useful constants. */
+/* According to termios(3) the maximum line length is 4096 chars
+ * (including the terminating newline character) */
 #define MAXLINE 4096
 
 /* Our own error-handling functions */

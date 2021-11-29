@@ -12,6 +12,9 @@ shell
 *.swp
 *~
 
+# Other files
+*.log
+
 # Archives
 *.tar.gz
 *.tgz

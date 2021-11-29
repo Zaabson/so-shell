@@ -8,10 +8,9 @@
 
 sigset_t sigchld_mask;
 
-static sigjmp_buf loop_env;
-
 static void sigint_handler(int sig) {
-  siglongjmp(loop_env, sig);
+  /* No-op handler, we just need break read() call with EINTR. */
+  (void)sig;
 }
 
 /* Rewrite closed file descriptors to -1,
@@ -149,31 +148,33 @@ static void eval(char *cmdline) {
 
 #ifndef READLINE
 static char *readline(const char *prompt) {
-  char *line = Malloc(MAXLINE);
-  int len, res;
+  static char line[MAXLINE]; /* `readline` is clearly not reentrant! */
 
   write(STDOUT_FILENO, prompt, strlen(prompt));
 
-  for (len = 0; len < MAXLINE; len++) {
-    if (!(res = Read(STDIN_FILENO, line + len, 1)))
-      break;
+  line[0] = '\0';
 
-    if (line[len] == '\n') {
-      line[len] = '\0';
-      return line;
-    }
+  ssize_t nread = read(STDIN_FILENO, line, MAXLINE);
+  if (nread < 0) {
+    if (errno != EINTR)
+      unix_error("Read error");
+    msg("\n");
+  } else if (nread == 0) {
+    return NULL; /* EOF */
+  } else {
+    if (line[nread - 1] == '\n')
+      line[nread - 1] = '\0';
   }
 
-  if (len == 0) {
-    free(line);
-    return NULL;
-  }
-
-  return line;
+  return strdup(line);
 }
 #endif
 
 int main(int argc, char *argv[]) {
+  /* `stdin` should be attached to terminal running in canonical mode */
+  if (!isatty(STDIN_FILENO))
+    app_error("ERROR: Shell can run only in interactive mode!");
+
 #ifdef READLINE
   rl_initialize();
 #endif
@@ -186,19 +187,18 @@ int main(int argc, char *argv[]) {
 
   initjobs();
 
-  Signal(SIGINT, sigint_handler);
+  struct sigaction act = {
+    .sa_handler = sigint_handler,
+    .sa_flags = 0, /* without SA_RESTART read() will return EINTR */
+  };
+  Sigaction(SIGINT, &act, NULL);
+
   Signal(SIGTSTP, SIG_IGN);
   Signal(SIGTTIN, SIG_IGN);
   Signal(SIGTTOU, SIG_IGN);
 
-  char *line;
   while (true) {
-    if (!sigsetjmp(loop_env, 1)) {
-      line = readline("# ");
-    } else {
-      msg("\n");
-      continue;
-    }
+    char *line = readline("# ");
 
     if (line == NULL)
       break;

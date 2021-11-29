@@ -14,3 +14,10 @@ jobs:
       - name: Check for unauthorized modifications
         run: ./check-files.py
       - uses: education/autograding@v1
+      - name: 'Archive test results'
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: sh-tests.*.log
+          retention-days: 1

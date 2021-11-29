@@ -52,10 +52,18 @@ class ShellTesterSimple():
         self.child.sendcontrol(ch)
 
     def expect(self, s, **kw):
-        self.child.expect(s, **kw)
+        try:
+            self.child.expect(s, **kw)
+        except pexpect.exceptions.TIMEOUT:
+            self.log(f'TEST: expected "{s}"')
+            raise
 
     def expect_exact(self, s, **kw):
-        self.child.expect_exact(s, **kw)
+        try:
+            self.child.expect_exact(s, **kw)
+        except pexpect.exceptions.TIMEOUT:
+            self.log(f'TEST: expected "{s}"')
+            raise
 
     @property
     def pid(self):
@@ -68,6 +76,9 @@ class ShellTesterSimple():
         self.sendline(cmd)
         self.expect('#')
         return self.lines_before()
+
+    def log(self, msg):
+        self.child.logfile.write(f'{msg}\n'.encode('utf-8'))
 
 
 class ShellTester(ShellTesterSimple):
@@ -246,7 +257,8 @@ class TestShellSimple(ShellTesterSimple, unittest.TestCase):
         self.sendline('pkill -9 cat')
         self.expect_exact("killed 'cat' by signal 9")
 
-    def _test_resume_suspended(self, prog):
+    def test_resume_suspended(self):
+        prog = 'cat'
         self.sendline(f'{prog} &')
         self.expect_exact(f"running '{prog}'")
         self.expect('#')
@@ -257,12 +269,6 @@ class TestShellSimple(ShellTesterSimple, unittest.TestCase):
         self.sendintr()
         self.sendline('jobs')
         self.expect('#', searchwindowsize=2)
-
-    def test_resume_suspended(self):
-        self._test_resume_suspended('cat')
-
-    def test_resume_suspended_pipe(self):
-        self._test_resume_suspended('cat | cat')
 
     def test_kill_jobs(self):
         self.sendline('sleep 1000 &')

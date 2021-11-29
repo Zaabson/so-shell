@@ -191,7 +191,17 @@ int monitorjob(sigset_t *mask) {
 
 /* Called just at the beginning of shell's life. */
 void initjobs(void) {
-  Signal(SIGCHLD, sigchld_handler);
+  struct sigaction act = {
+    .sa_flags = SA_RESTART,
+    .sa_handler = sigchld_handler,
+  };
+
+  /* Block SIGINT for the duration of `sigchld_handler`
+   * in case `sigint_handler` does something crazy like `longjmp`. */
+  sigemptyset(&act.sa_mask);
+  sigaddset(&act.sa_mask, SIGINT);
+  Sigaction(SIGCHLD, &act, NULL);
+
   jobs = calloc(sizeof(job_t), 1);
 
   /* Assume we're running in interactive mode, so move us to foreground.

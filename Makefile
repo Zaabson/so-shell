@@ -12,7 +12,7 @@ LDLIBS += -lreadline
 shell: shell.o command.o lexer.o jobs.o
 
 test:
-	python3 sh-tests.py -v
+	for i in `seq 1 5`; do python3 sh-tests.py -v || exit 1; done
 
 trace.so: trace.c
 
