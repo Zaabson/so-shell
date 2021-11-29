@@ -1,3 +1,9 @@
+#include "csapp.h"
+#include <asm-generic/errno-base.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -31,8 +37,50 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
-    (void)mode;
-    (void)MaybeClose;
+    // // handle redirections
+    // // Assumes valid command/pipe.
+    // if (token[i] == T_INPUT && i+1 < ntokens && token[i+1] != NULL) {
+    //   int fd = Open(token[i+1], O_RDONLY, 0);
+    //   *inputp = fd;
+    //   token[i] = mode; // for what is mode defined?
+    //   token[i+1] = NULL;
+    // if (token[i] == T_OUTPUT && i+1 < ntokens && token[i+1] != NULL) {
+    //   int fd = Open(token[i+1], O_WRONLY | O_CREAT, S_IWUSR);
+    //   *outputp = fd;
+    //   token[i] = NULL;
+    //   token[i+1] = NULL;
+    
+    // Initialize n=ntokens and not 0 ;/
+    if (i == 0)
+      n = ntokens;
+
+    // go backwards
+    int j = ntokens - i -1;
+    // Consume tokens related to redirection UP TO first appearence of pipe | operator.
+    // AND! starting from the end.
+    if (token[j] == T_PIPE)
+      break;
+
+    // handle redirections
+    // this accepts command "< file cat" what I call a feature
+    if (token[j] == T_INPUT && j+1 < ntokens && token[j+1] != NULL) {
+      int fd = Open(token[j+1], O_RDONLY, 0);
+      *inputp = fd;
+      token[j] = mode; // for what is mode defined?
+      token[j+1] = NULL;
+      if (n == j+2)
+        n = j;
+    }
+    if (token[j] == T_OUTPUT && j+1 < ntokens && token[j+1] != NULL) {
+      int fd = Open(token[j+1], O_WRONLY | O_CREAT, S_IWUSR);
+      *outputp = fd;
+      token[j] = NULL;
+      token[j+1] = NULL;
+      if (n == j+2)
+        n = j;
+    }
+    // leaks opened file descriptors if multiple redirects
+
 #endif /* !STUDENT */
   }
 
@@ -58,6 +106,44 @@ static int do_job(token_t *token, int ntokens, bool bg) {
 
   /* TODO: Start a subprocess, create a job and monitor it. */
 #ifdef STUDENT
+  int pid;
+  if ((pid = Fork()) == 0) {
+    // in child
+    Setpgid(0, 0);
+    if (!bg)
+      setfgpgrp(getpgrp());
+
+    // set stdin/stdout
+    if (input >= 0)
+      Dup2(input, 0);
+    if (output >= 0)
+      Dup2(output, 1);
+    MaybeClose(&input);
+    MaybeClose(&output);
+
+    // execve, fg builtin command above
+    external_command(token);
+
+  } else {
+    // in parent
+    
+    // ignore EACCES error - children already performed execve 
+    setpgid(pid, pid);
+
+    MaybeClose(&input);
+    MaybeClose(&output);
+
+    // char *cmdtext[] = {"cmd"};
+    int j = addjob(pid, bg);
+    // dprintf(STDERR_FILENO, "%s %s\n", token[0], token[1]);
+    addproc(j, pid, token);
+    if (!bg) {
+      setfgpgrp(pid);
+      monitorjob(&mask);
+    }
+
+  }
+
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
@@ -76,6 +162,37 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   /* TODO: Start a subprocess and make sure it's moved to a process group. */
   pid_t pid = Fork();
 #ifdef STUDENT
+
+  if (pid == 0) {
+    // child
+    setpgid(0, pgid);
+    // if (!bg)
+    //   setfgpgrp( pgid ? pgid : getpid() );
+    // set stdin/stdout
+    if (input >= 0)
+      Dup2(input, 0);
+    if (output >= 0)
+      Dup2(output, 1);
+    MaybeClose(&input);
+    MaybeClose(&output);
+
+    if (builtin_command(token) < 0) {
+      external_command(token);
+    }
+
+  } else {
+    // ignore EACCES - children already performed execve
+    setpgid(pid, pgid);
+    // if (!bg) {
+    //   setfgpgrp(pgid ? pgid : pid);
+    // }
+    MaybeClose(&input);
+    MaybeClose(&output);
+    // parent
+  }
+
+
+
 #endif /* !STUDENT */
 
   return pid;
@@ -107,11 +224,66 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
-  (void)input;
-  (void)job;
-  (void)pid;
-  (void)pgid;
-  (void)do_stage;
+  // (void)input;
+  // (void)job;
+  // (void)pid;
+  // (void)pgid;
+  // (void)do_stage;
+  int next_output;
+
+  int i = ntokens-1;
+  for (; i>=0 && token[i] != T_PIPE;i--) {;}
+  // token[i] = T_PIPE
+  // do_stage with pgid = 0
+  // dprintf(STDERR_FILENO, "%d\n", i);
+  pgid = do_stage(0, &mask, next_input, -1, &token[i+1], ntokens-i-1, bg);
+  next_output = output;
+  job = addjob(pgid, bg);
+  token[i] = NULL;
+  addproc(job, pgid, &token[i+1]);
+
+  while (1) {
+    int j = i;
+    for (; i>=0 && token[i] != T_PIPE;i--) {;}
+    // dprintf(STDERR_FILENO, "%d %d ", i, j);
+    if (token[i] == T_PIPE) {
+      mkpipe(&input, &output);
+      pid = do_stage(pgid, &mask, input, next_output, &token[i+1], j-i-1, bg);
+      next_output = output;
+      addproc(job, pid, &token[i+1]);
+      token[i] = NULL;
+    } else { // i < 0
+      pid = do_stage(pgid, &mask, -1, next_output, token, j, bg);
+      addproc(job, pid, token);
+      break;
+    }
+  }
+
+  if (!bg) {
+    setfgpgrp(pgid);
+    monitorjob(&mask);
+  }
+
+  // int i = 0;
+  // while (i < ntokens) {
+  //   // create process command
+  //   token_t *newtoken = Malloc(sizeof(token_t));
+  //   int j=0;
+  //   while (i < ntokens && token[i] != T_PIPE) {
+
+  //     // iterate up to next T_PIPE, compact a command into newtoken
+  //     for (int i = 0; token[i] != T_PIPE && i < ntokens; i++) {
+  //       if (token[i] != NULL) {
+  //         newtoken[j] = token[i];
+  //         Realloc(newtoken, sizeof(token_t) * (j+1));
+  //         j = j+1;
+  //       }
+  //     }
+  //     newtoken[j] = NULL;
+  //   }
+  // }
+  
+
 #endif /* !STUDENT */
 
   Sigprocmask(SIG_SETMASK, &mask, NULL);
