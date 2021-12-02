@@ -6,6 +6,7 @@
 import os
 import pexpect
 import unittest
+import subprocess
 import random
 import time
 import sys
@@ -13,6 +14,8 @@ from tempfile import NamedTemporaryFile
 
 
 LOGFILE = 'sh-tests.{}.log'.format(os.getpid())
+LD_PRELOAD = './trace.so'
+BADFNS = ['sleep', 'poll', 'select', 'alarm']
 
 
 class ShellTesterSimple():
@@ -30,14 +33,8 @@ class ShellTesterSimple():
         self.child.logfile.close()
 
     def lines_before(self):
-        return [line.strip()
-                for line in self.child.before.decode('utf-8').split('\r\n')
-                if len(line)]
-
-    def lines_after(self):
-        return [line.strip()
-                for line in self.child.after.decode('utf-8').split('\r\n')
-                if len(line)]
+        before = self.child.before.decode('utf-8').split('\r\n')
+        return [line.strip() for line in before if len(line)]
 
     def send(self, s):
         self.child.send(s)
@@ -73,9 +70,18 @@ class ShellTesterSimple():
         self.child.wait()
 
     def execute(self, cmd):
+        """ Captures an output from the command. """
+        # There's bug (?) in pexpect that's somewhat difficult to reproduce.
+        # After the command is issued we read from standard output till
+        # prompt character. Unexpectedly sometimes the command string
+        # is getting captured as the first line of output from the command.
         self.sendline(cmd)
         self.expect('#')
-        return self.lines_before()
+        before = self.lines_before()
+        # XXX: Workaround for issue described above.
+        if before and cmd in before[0]:
+            before.pop(0)
+        return before
 
     def log(self, msg):
         self.child.logfile.write(f'{msg}\n'.encode('utf-8'))
@@ -83,7 +89,7 @@ class ShellTesterSimple():
 
 class ShellTester(ShellTesterSimple):
     def setUp(self):
-        os.environ['LD_PRELOAD'] = './trace.so'
+        os.environ['LD_PRELOAD'] = LD_PRELOAD
         super().setUp()
 
     def tearDown(self):
@@ -376,6 +382,23 @@ class TestShellWithSyscalls(ShellTester, unittest.TestCase):
 if __name__ == '__main__':
     os.environ['PATH'] = '/usr/bin:/bin'
     os.environ['LC_ALL'] = 'C'
+
+    ldd = subprocess.run(['ldd', 'shell'], stdout=subprocess.PIPE)
+    for line in ldd.stdout.decode('utf-8').splitlines():
+        if 'libasan' in line:
+            LD_PRELOAD = line.split()[2] + ':' + LD_PRELOAD
+
+    # Fail loudly if a call to function that can provide sleep functionality
+    # is used.  We don't want it to be used for synchronization purposes.
+    nm = subprocess.run(['nm', '-u', 'shell.o', 'jobs.o', 'command.o'],
+                        stdout=subprocess.PIPE)
+    for line in nm.stdout.decode('utf-8').splitlines():
+        fields = [fs.strip() for fs in line.split()]
+        if len(fields) != 2:
+            continue
+        if fields[0] == 'U' and any(fn in fields[1] for fn in BADFNS):
+            raise SystemExit(f'Solution rejected: a call to "{fields[1]}" '
+                             f'is not permitted!')
 
     with open(LOGFILE, 'wb') as f:
         f.truncate()

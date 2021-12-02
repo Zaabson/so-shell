@@ -1,4 +1,4 @@
-844e991d3a064c5df95b9a706de68430  .github/classroom/autograding.json
+2c63cba1b68e7fcb70c571533bc14d8c  .github/classroom/autograding.json
 b91dd9abba52fd90c0731aeb95290cdb  .github/workflows/classroom.yml
 8b18c4a6b06fc53caaec115bb554ecf0  include/bitstring.h
 1d7d70b239717947dedcc42146517c0f  include/csapp.h
@@ -73,10 +73,10 @@ d73e0e55f2a67cf5b0d06c0bdc46a53b  libcsapp/Waitpid.c
 67f915b143d03c1c3b8c09dbaf46eda1  command.c
 0a9f12f3746a1b06b9bb0f8c25a0379c  jobs.c
 14544aaf7c3ef7bfc18f4517a4af60e6  lexer.c
-2c6e7bc47b473c343d7dab7951fd0deb  Makefile
+2ccf39657567f761b5955c528e97bb0e  Makefile
 0e64f86947504e65f060189b8653139d  Makefile.include
 bcfc4f95ca76a6f421b9457984146a84  run-clang-format.sh
 789ffe4853ad2d99c6330e3c3fd0e683  shell.c
 4b8571a1123fe082f04ef805ddb8bff2  shell.h
-42bf82b58550157914ecc8c1198dd938  sh-tests.py
+cfb87487a440cb24f991511e5ca9190e  sh-tests.py
 43eca75c03f44eebaadcf8e916ef5928  trace.c

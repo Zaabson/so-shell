@@ -11,11 +11,11 @@
     },
     {
       "name": "Run tests",
-      "run": "make test",
+      "run": "timeout -v 5m make test",
       "input": "",
       "output": "",
       "comparison": "included",
-      "timeout": 60,
+      "timeout": 5,
       "points": 1
     }
   ]
