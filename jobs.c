@@ -1,11 +1,4 @@
-#include "csapp.h"
 #include "shell.h"
-#include <signal.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 typedef struct proc {
   pid_t pid;    /* process identifier */
@@ -63,9 +56,9 @@ static void sigchld_handler(int sig) {
               proc->exitcode = status; 
             } else if (WIFSTOPPED(status)) {
               proc->state = STOPPED;
-            } else if (WIFCONTINUED(status)) {
-              // this case included for this function to be used inside watchjobs to be update states
-              proc->state = RUNNING;
+            // } else if (WIFCONTINUED(status)) {
+            //   // this case included for this function to be used inside watchjobs to update states
+            //   proc->state = RUNNING;
             }
           }
         }
@@ -212,13 +205,20 @@ bool resumejob(int j, int bg, sigset_t *mask) {
   job_t *job = &jobs[j];
 
   if (!bg) {
-    // send to fg, give terminal before SIGCONT
+    printf("continue '%s'\n", job->command);
+    // send to fg, give terminal before SIGCONT, set terminal attributes
+    Tcsetattr(tty_fd, TCSADRAIN, &jobs->tmodes);
     setfgpgrp(job->pgid);
     movejob(j, 0);
   }
   // run job
   job->state = RUNNING;
   Kill(-job->pgid, SIGCONT);
+
+  // if fg monitor job
+  if (!bg) {
+    monitorjob(mask);
+  }
 
 #endif /* !STUDENT */
 
@@ -248,13 +248,6 @@ void watchjobs(int which) {
 
       /* TODO: Report job number, state, command and exit code or signal. */
 #ifdef STUDENT
-
-    // update jobs statuses
-    sigset_t mask;
-    Sigprocmask(SIG_BLOCK, &sigchld_mask, &mask);
-    sigchld_handler(SIGCHLD);
-    Sigprocmask(SIG_SETMASK, &mask, NULL);
-
     // int status;  
     if (jobs[j].state == which || which == ALL) {
       int state;
@@ -263,18 +256,17 @@ void watchjobs(int which) {
       // save job command
       const char *cmd = strdup(jobs[j].command);
 
-      // const char * cmd = "plaza";
       // jobstate removes FINISHED
       if ((state = jobstate(j,statusp)) == FINISHED) {
         if (WIFEXITED(*statusp)) {
-          msg("[%d] %s '%s' with status=%d\n", j, "exited", cmd, WEXITSTATUS(*statusp));   
+          printf("[%d] %s '%s', status=%d\n", j, "exited", cmd, WEXITSTATUS(*statusp));   
         } else if (WIFSIGNALED(*statusp)) {
-          msg("[%d] %s '%s' by signal %d\n", j, "killed", cmd, WTERMSIG(*statusp));    
+          printf("[%d] %s '%s' by signal %d\n", j, "killed", cmd, WTERMSIG(*statusp));    
         }
       } else if (state == STOPPED) {
-        msg("[%d] %s '%s'\n", j, "stopped", cmd);    
+        printf("[%d] %s '%s'\n", j, "suspended", cmd);    
       } else if (state == RUNNING) {
-        msg("[%d] %s '%s'\n", j, "running", cmd);    
+        printf("[%d] %s '%s'\n", j, "running", cmd);    
       }
     }
 #endif /* !STUDENT */
@@ -288,23 +280,18 @@ int monitorjob(sigset_t *mask) {
 
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
 #ifdef STUDENT
-  // job_t *job = &jobs[FG];
-  // int *statusp;
 
   // wait for a foreground job to finish or to be stopped, 
   // that is all job processes finish or all stop. 
   while ( (state=jobstate(FG, NULL)) == RUNNING ) {
-    // dprintf(STDERR_FILENO, "here %d\n", jobs[0].state);
     // wait for some process to change state from running, it can only happen after sigchld_handler is run
     Sigsuspend(mask);
-    // write(STDERR_FILENO, "here\n", 5);
-    // dprintf(STDERR_FILENO, "here %d\n", jobs[0].state);
   }
   // set shell to foreground
   setfgpgrp( getpgrp() );
-  // dprintf(STDERR_FILENO, "there %d\n", jobs[0].state);
-  // sleep(1);
-
+  // put back terminal attributes
+  Tcsetattr(tty_fd, TCSADRAIN, &shell_tmodes);
+  
   if (state == STOPPED) {
     // move job to background
     movejob(FG, allocjob());
@@ -356,6 +343,16 @@ void shutdownjobs(void) {
     if (jobs[j].pgid != 0)
       killjob(j);
   }
+  // int *statusp = Malloc(sizeof(int));
+  // while (wait(statusp) > 0) {
+  //   if ((state = jobstate(j,statusp)) == FINISHED) {
+  //     if (WIFEXITED(*statusp)) {
+  //         printf("[%d] %s '%s', status=%d\n", j, "exited", cmd, WEXITSTATUS(*statusp));   
+  //       } else if (WIFSIGNALED(*statusp)) {
+  //         printf("[%d] %s '%s' by signal %d\n", j, "killed", cmd, WTERMSIG(*statusp));    
+  //       }
+  //     }
+  // }
   // wait for all processes to finish
   for (int j=0; j<njobmax; j++) {
       if (jobs[j].pgid != 0) {

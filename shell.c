@@ -1,9 +1,3 @@
-#include "csapp.h"
-#include <asm-generic/errno-base.h>
-#include <errno.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 #ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -140,6 +134,8 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     if (!bg) {
       setfgpgrp(pid);
       monitorjob(&mask);
+    } else {
+      dprintf(STDIN_FILENO, "running '%s'\n", jobcmd(j));
     }
 
   }

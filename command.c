@@ -1,6 +1,4 @@
 #include "shell.h"
-#include <string.h>
-#include <unistd.h>
 
 typedef int (*func_t)(char **argv);
 
