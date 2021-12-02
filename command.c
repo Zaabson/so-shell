@@ -1,3 +1,4 @@
+#include "csapp.h"
 #include "shell.h"
 
 typedef int (*func_t)(char **argv);
@@ -116,19 +117,18 @@ noreturn void external_command(char **argv) {
 
   while (1) {
     int tosep = strcspn(path, ":");
-    if (path[tosep]) {
-      char * str = strndup(path, tosep);
-      strapp(&str, "/");  
-      strapp(&str, argv[0]);  
-      
-      execv(str, argv);
-
-      path = path + tosep + 1;
-    } else {
-      break; // upsi if we get there as the function is marked noreturn
-    }
+    char * str = strndup(path, tosep);
+    strapp(&str, "/");  
+    strapp(&str, argv[0]);  
+    
+    execve(str, argv, environ);
+    free(str);
+    if (!path[tosep]) {
+        // hit end of str
+        break;
+      }
+    path = path + tosep + 1;
   }
-
 #endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);

@@ -1,3 +1,5 @@
+#include <signal.h>
+#include <unistd.h>
 #ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -115,6 +117,14 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     MaybeClose(&input);
     MaybeClose(&output);
 
+    // unmask everything and unignore signals
+    sigset_t set;
+    sigemptyset(&set);
+    Sigprocmask(SIG_SETMASK, &set, NULL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+    
     // execve, fg builtin command above
     external_command(token);
 
@@ -135,7 +145,9 @@ static int do_job(token_t *token, int ntokens, bool bg) {
       setfgpgrp(pid);
       monitorjob(&mask);
     } else {
-      dprintf(STDIN_FILENO, "running '%s'\n", jobcmd(j));
+      setfgpgrp(getpgrp());
+      dprintf(STDIN_FILENO, "[%d] running '%s'\n", j, jobcmd(j));
+      // write(STDIN_FILENO, "running sth\n", 12);
     }
 
   }
@@ -162,8 +174,8 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   if (pid == 0) {
     // child
     setpgid(0, pgid);
-    // if (!bg)
-    //   setfgpgrp( pgid ? pgid : getpid() );
+    if (!bg)
+      setfgpgrp( getpgrp() );
     // set stdin/stdout
     if (input >= 0)
       Dup2(input, 0);
@@ -172,6 +184,14 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
     MaybeClose(&input);
     MaybeClose(&output);
 
+    // unmask everything and unignore signals
+    sigset_t set;
+    sigemptyset(&set);
+    Sigprocmask(SIG_SETMASK, &set, NULL);
+    Signal(SIGTSTP, SIG_DFL);
+    Signal(SIGTTIN, SIG_DFL);
+    Signal(SIGTTOU, SIG_DFL);
+
     if (builtin_command(token) < 0) {
       external_command(token);
     }
@@ -179,9 +199,11 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
   } else {
     // ignore EACCES - children already performed execve
     setpgid(pid, pgid);
-    // if (!bg) {
-    //   setfgpgrp(pgid ? pgid : pid);
-    // }
+    if (!bg) {
+      setfgpgrp(pgid ? pgid : pid);
+    } else {
+      setfgpgrp(getpgrp());
+    }
     MaybeClose(&input);
     MaybeClose(&output);
     // parent
@@ -227,21 +249,20 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   // (void)do_stage;
   int next_output;
 
+  // start with some process
   int i = ntokens-1;
   for (; i>=0 && token[i] != T_PIPE;i--) {;}
-  // token[i] = T_PIPE
-  // do_stage with pgid = 0
-  // dprintf(STDERR_FILENO, "%d\n", i);
   pgid = do_stage(0, &mask, next_input, -1, &token[i+1], ntokens-i-1, bg);
   next_output = output;
   job = addjob(pgid, bg);
   token[i] = NULL;
   addproc(job, pgid, &token[i+1]);
 
+  // continue with the rest
   while (1) {
     int j = i;
     for (; i>=0 && token[i] != T_PIPE;i--) {;}
-    // dprintf(STDERR_FILENO, "%d %d ", i, j);
+    
     if (token[i] == T_PIPE) {
       mkpipe(&input, &output);
       pid = do_stage(pgid, &mask, input, next_output, &token[i+1], j-i-1, bg);
@@ -258,6 +279,9 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   if (!bg) {
     setfgpgrp(pgid);
     monitorjob(&mask);
+  } else {
+    // przezorny zawsze ubezpieczony
+    setfgpgrp(getpgrp());
   }
 
   // int i = 0;

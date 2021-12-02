@@ -199,7 +199,7 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 
     /* TODO: Continue stopped job. Possibly move job to foreground slot. */
 #ifdef STUDENT
-  (void)movejob;
+  // (void)movejob;
   // if j=-1 take last job
   j = j < 0 ? njobmax-1 : j ;
   job_t *job = &jobs[j];
@@ -207,8 +207,8 @@ bool resumejob(int j, int bg, sigset_t *mask) {
   if (!bg) {
     printf("continue '%s'\n", job->command);
     // send to fg, give terminal before SIGCONT, set terminal attributes
-    Tcsetattr(tty_fd, TCSADRAIN, &jobs->tmodes);
     setfgpgrp(job->pgid);
+    Tcsetattr(tty_fd, TCSADRAIN, &jobs[j].tmodes);
     movejob(j, 0);
   }
   // run job
@@ -268,6 +268,9 @@ void watchjobs(int which) {
       } else if (state == RUNNING) {
         printf("[%d] %s '%s'\n", j, "running", cmd);    
       }
+
+      free(statusp);
+      free((void *)cmd);
     }
 #endif /* !STUDENT */
   }
@@ -290,7 +293,7 @@ int monitorjob(sigset_t *mask) {
   // set shell to foreground
   setfgpgrp( getpgrp() );
   // put back terminal attributes
-  Tcsetattr(tty_fd, TCSADRAIN, &shell_tmodes);
+  Tcsetattr(tty_fd, TCSAFLUSH, &shell_tmodes);
   
   if (state == STOPPED) {
     // move job to background
@@ -340,26 +343,26 @@ void shutdownjobs(void) {
   // kill jobs 
   for (int j=0; j<njobmax; j++) {
     // job_t *job = &jobs[j];
-    if (jobs[j].pgid != 0)
+    if (jobs[j].pgid != 0 && jobs[j].state != FINISHED)
       killjob(j);
   }
-  // int *statusp = Malloc(sizeof(int));
-  // while (wait(statusp) > 0) {
-  //   if ((state = jobstate(j,statusp)) == FINISHED) {
-  //     if (WIFEXITED(*statusp)) {
-  //         printf("[%d] %s '%s', status=%d\n", j, "exited", cmd, WEXITSTATUS(*statusp));   
-  //       } else if (WIFSIGNALED(*statusp)) {
-  //         printf("[%d] %s '%s' by signal %d\n", j, "killed", cmd, WTERMSIG(*statusp));    
-  //       }
-  //     }
-  // }
-  // wait for all processes to finish
-  for (int j=0; j<njobmax; j++) {
-      if (jobs[j].pgid != 0) {
-        for (int k=0; k<jobs[j].nproc; k++) {
-          Waitpid(jobs[j].proc[k].pid, NULL, 0);
-        }
-      }
+
+  // wait for a background jobs to finish, 
+  while (1) {
+    // all jobs finished?
+    bool bl = true;
+    for (int j=0; j<njobmax; j++) {
+      if (jobs[j].pgid != 0 && jobs[j].state != FINISHED) {
+        bl = false;
+        break;
+      } 
+    }
+    if (bl) {
+      break;
+    } else {
+    // wait for some process to change state to FINISHED, it can only happen after sigchld_handler is run
+      Sigsuspend(&mask);
+    }
   }
 
 #endif /* !STUDENT */
