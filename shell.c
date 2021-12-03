@@ -1,3 +1,4 @@
+#include "csapp.h"
 #include <signal.h>
 #include <unistd.h>
 #ifdef READLINE
@@ -242,39 +243,75 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
-  // (void)input;
-  // (void)job;
-  // (void)pid;
-  // (void)pgid;
-  // (void)do_stage;
+
   int next_output;
+
+  int *pid_list = Malloc(sizeof(int));
+  int pid_n = 0;
 
   // start with some process
   int i = ntokens-1;
-  for (; i>=0 && token[i] != T_PIPE;i--) {;}
+  for (; i>0 && token[i] != T_PIPE;i--) {;}
   pgid = do_stage(0, &mask, next_input, -1, &token[i+1], ntokens-i-1, bg);
   next_output = output;
   job = addjob(pgid, bg);
   token[i] = NULL;
-  addproc(job, pgid, &token[i+1]);
+
+  // addproc(job, pgid, &token[i+1]);
+  // save pid to later call addproc
+  pid_list[pid_n] = pgid;
+  pid_n += 1;
+  pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
+  
 
   // continue with the rest
   while (1) {
     int j = i;
-    for (; i>=0 && token[i] != T_PIPE;i--) {;}
-    
+  
+    for (; i>0 && token[i] != T_PIPE;i--) {;}
+    // here we go to i=-1 and try token[-1]
     if (token[i] == T_PIPE) {
+    
       mkpipe(&input, &output);
+    
       pid = do_stage(pgid, &mask, input, next_output, &token[i+1], j-i-1, bg);
+    
       next_output = output;
-      addproc(job, pid, &token[i+1]);
+      // addproc(job, pid, &token[i+1]);    
+      // save pid to later call addproc
+      pid_list[pid_n] = pid;
+      pid_n += 1;
+      pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
+    
+
       token[i] = NULL;
-    } else { // i < 0
+    } else { // i = 0
       pid = do_stage(pgid, &mask, -1, next_output, token, j, bg);
-      addproc(job, pid, token);
+      // addproc(job, pid, token);
+      // save pid to later call addproc
+      pid_list[pid_n] = pid;
+      pid_n += 1;
+      pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
+    
       break;
     }
   }
+
+  // I wanted to iterate from last process in pipe to first.
+  // Didnt realize this means addproc is called in this order and so command is created backwards.
+  // Prefer this quick hack to fix command (and exit status) rather than rewrite this and do_redir.
+  token_t *start = token;
+  for (int l=0; l < pid_n; l++) {
+    addproc(job, pid_list[pid_n-l-1], start);
+    // addproc(job, pid, start);
+    // loop to next cmd
+    if (l+1 < pid_n) {
+      for (; *start; start++) {}
+      start++;
+    }
+  }
+
+  free(pid_list);
 
   if (!bg) {
     setfgpgrp(pgid);
@@ -282,6 +319,7 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   } else {
     // przezorny zawsze ubezpieczony
     setfgpgrp(getpgrp());
+    dprintf(STDIN_FILENO, "[%d] running '%s'\n", job, jobcmd(job));
   }
 
   // int i = 0;

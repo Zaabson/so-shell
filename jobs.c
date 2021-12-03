@@ -41,24 +41,25 @@ static void sigchld_handler(int sig) {
         // dprintf(STDERR_FILENO, "job=%d proc=%d", j, k);
         proc = &(job->proc[k]);
         if (proc->state != FINISHED) {
-          pid = Waitpid(proc->pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
-          // dprintf(STDERR_FILENO, "job=%d proc=%d status=%d\n", j, 0, status);
+          if ((pid = waitpid(proc->pid, &status, WNOHANG | WUNTRACED | WCONTINUED))) {
+            // dprintf(STDERR_FILENO, "job=%d proc=%d status=%d\n", j, 0, status);
 
-          if (pid > 0) {
-            // if terminated save status as is to be later inspected
-            if (WIFEXITED(status)) {
-              //  exited normally
-              proc->state = FINISHED;
-              proc->exitcode = status;
-            } else if (WIFSIGNALED(status)) {
-              // procpid was terminated by signal
-              proc->state = FINISHED;
-              proc->exitcode = status; 
-            } else if (WIFSTOPPED(status)) {
-              proc->state = STOPPED;
-            // } else if (WIFCONTINUED(status)) {
-            //   // this case included for this function to be used inside watchjobs to update states
-            //   proc->state = RUNNING;
+            if (pid > 0) {
+              // if terminated save status as is to be later inspected
+              if (WIFEXITED(status)) {
+                //  exited normally
+                proc->state = FINISHED;
+                proc->exitcode = status;
+              } else if (WIFSIGNALED(status)) {
+                // procpid was terminated by signal
+                proc->state = FINISHED;
+                proc->exitcode = status; 
+              } else if (WIFSTOPPED(status)) {
+                proc->state = STOPPED;
+              // } else if (WIFCONTINUED(status)) {
+              //   // this case included for this function to be used inside watchjobs to update states
+              //   proc->state = RUNNING;
+              }
             }
           }
         }
