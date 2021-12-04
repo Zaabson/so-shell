@@ -31,34 +31,35 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
-    
-    // Start from the end and consume inp/out related tokens UP TO first PIPE token. 
+
+    // Start from the end and consume inp/out related tokens UP TO first PIPE
+    // token.
 
     // go backwards
     if (i == 0)
       n = ntokens;
-    int j = ntokens - i -1;
-    // Consume tokens related to redirection UP TO first appearence of pipe | operator.
-    // AND! starting from the end.
+    int j = ntokens - i - 1;
+    // Consume tokens related to redirection UP TO first appearence of pipe |
+    // operator. AND! starting from the end.
     if (token[j] == T_PIPE)
       break;
 
     // handle redirections
     // this accepts command "< file cat" what I call a feature
-    if (token[j] == T_INPUT && j+1 < ntokens && token[j+1] != NULL) {
-      int fd = Open(token[j+1], O_RDONLY, 0);
+    if (token[j] == T_INPUT && j + 1 < ntokens && token[j + 1] != NULL) {
+      int fd = Open(token[j + 1], O_RDONLY, 0);
       *inputp = fd;
       token[j] = mode; // mode=NULL
-      token[j+1] = NULL;
-      if (n == j+2)
+      token[j + 1] = NULL;
+      if (n == j + 2)
         n = j;
     }
-    if (token[j] == T_OUTPUT && j+1 < ntokens && token[j+1] != NULL) {
-      int fd = Open(token[j+1], O_WRONLY | O_CREAT, S_IWUSR);
+    if (token[j] == T_OUTPUT && j + 1 < ntokens && token[j + 1] != NULL) {
+      int fd = Open(token[j + 1], O_WRONLY | O_CREAT, S_IWUSR);
       *outputp = fd;
       token[j] = NULL;
-      token[j+1] = NULL;
-      if (n == j+2)
+      token[j + 1] = NULL;
+      if (n == j + 2)
         n = j;
     }
     // leaks opened file descriptors if multiple redirects
@@ -110,14 +111,14 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     Signal(SIGTSTP, SIG_DFL);
     Signal(SIGTTIN, SIG_DFL);
     Signal(SIGTTOU, SIG_DFL);
-    
+
     // execve, fg builtin command above
     external_command(token);
 
   } else {
     // in parent
-    
-    // ignore EACCES error - children already performed execve 
+
+    // ignore EACCES error - children already performed execve
     setpgid(pid, pid);
 
     MaybeClose(&input);
@@ -132,7 +133,6 @@ static int do_job(token_t *token, int ntokens, bool bg) {
       setfgpgrp(getpgrp());
       dprintf(STDIN_FILENO, "[%d] running '%s'\n", j, jobcmd(j));
     }
-
   }
 
 #endif /* !STUDENT */
@@ -158,7 +158,7 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
     // child
     setpgid(0, pgid);
     if (!bg)
-      setfgpgrp( getpgrp() );
+      setfgpgrp(getpgrp());
     // set stdin/stdout
     if (input >= 0)
       Dup2(input, 0);
@@ -192,8 +192,6 @@ static pid_t do_stage(pid_t pgid, sigset_t *mask, int input, int output,
     // parent
   }
 
-
-
 #endif /* !STUDENT */
 
   return pid;
@@ -225,20 +223,23 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
-  
-  // Here I traverse the token list starting from the end and creating processes.
-  // This turned out to be a bad idea as the job command and proc list was created backwards.
-  // I decided on a hack: store pids in a list and run addproc in a seperate loop after the main loop.
+
+  // Here I traverse the token list starting from the end and creating
+  // processes. This turned out to be a bad idea as the job command and proc
+  // list was created backwards. I decided on a hack: store pids in a list and
+  // run addproc in a seperate loop after the main loop.
 
   int next_output;
   int *pid_list = Malloc(sizeof(int));
   int pid_n = 0;
 
   // start with some process (the last in pipeline)
-  int i = ntokens-1;
+  int i = ntokens - 1;
   // traverse up to previous T_PIPE token.
-  for (; i>0 && token[i] != T_PIPE;i--) {;}
-  pgid = do_stage(0, &mask, next_input, -1, &token[i+1], ntokens-i-1, bg);
+  for (; i > 0 && token[i] != T_PIPE; i--) {
+    ;
+  }
+  pgid = do_stage(0, &mask, next_input, -1, &token[i + 1], ntokens - i - 1, bg);
   next_output = output;
   job = addjob(pgid, bg);
   token[i] = NULL;
@@ -247,20 +248,22 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   pid_list[pid_n] = pgid;
   pid_n += 1;
   pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
-  
 
   // continue with the rest of processes
   while (1) {
     int j = i;
-  
+
     // traverse up to previous T_PIPE token or begining.
-    for (; i>0 && token[i] != T_PIPE;i--) {;}
+    for (; i > 0 && token[i] != T_PIPE; i--) {
+      ;
+    }
     if (token[i] == T_PIPE) {
-    
+
       mkpipe(&input, &output);
-      pid = do_stage(pgid, &mask, input, next_output, &token[i+1], j-i-1, bg);
+      pid =
+        do_stage(pgid, &mask, input, next_output, &token[i + 1], j - i - 1, bg);
       next_output = output;
-  
+
       // save pid to later call addproc
       pid_list[pid_n] = pid;
       pid_n += 1;
@@ -276,21 +279,23 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
       pid_list[pid_n] = pid;
       pid_n += 1;
       pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
-    
+
       break;
     }
   }
 
   // I wanted to iterate from last process in pipe to first.
-  // Didnt realize this means addproc is called in this order and so command is created backwards.
-  // Prefer this quick hack to fix command (and exit status) rather than rewrite this and do_redir.
+  // Didnt realize this means addproc is called in this order and so command is
+  // created backwards. Prefer this quick hack to fix command (and exit status)
+  // rather than rewrite this and do_redir.
   token_t *start = token;
-  for (int l=0; l < pid_n; l++) {
-    addproc(job, pid_list[pid_n-l-1], start);
+  for (int l = 0; l < pid_n; l++) {
+    addproc(job, pid_list[pid_n - l - 1], start);
 
     // loop to next cmd
-    if (l+1 < pid_n) {
-      for (; *start; start++) {}
+    if (l + 1 < pid_n) {
+      for (; *start; start++) {
+      }
       start++;
     }
   }
@@ -303,7 +308,7 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   } else {
     setfgpgrp(getpgrp());
     dprintf(STDIN_FILENO, "[%d] running '%s'\n", job, jobcmd(job));
-  }  
+  }
 
 #endif /* !STUDENT */
 

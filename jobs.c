@@ -50,7 +50,7 @@ static void sigchld_handler(int sig) {
               } else if (WIFSIGNALED(status)) {
                 // procpid was terminated by signal
                 proc->state = FINISHED;
-                proc->exitcode = status; 
+                proc->exitcode = status;
               } else if (WIFSTOPPED(status)) {
                 proc->state = STOPPED;
               }
@@ -59,11 +59,11 @@ static void sigchld_handler(int sig) {
         }
       }
 
-        // job state changes if all processes changed state to the same state.
+      // job state changes if all processes changed state to the same state.
       int st = job->proc[0].state;
       if (st != job->state) {
         // job state change is possible
-        for (int m = 1; m<job->nproc; m++) {
+        for (int m = 1; m < job->nproc; m++) {
           if (job->proc[m].state != st) {
             // state remains unchanged
             st = job->state;
@@ -194,7 +194,7 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 #ifdef STUDENT
 
   // if j=-1 take last job
-  j = j < 0 ? njobmax-1 : j ;
+  j = j < 0 ? njobmax - 1 : j;
   job_t *job = &jobs[j];
 
   if (!bg) {
@@ -241,7 +241,7 @@ void watchjobs(int which) {
 
       /* TODO: Report job number, state, command and exit code or signal. */
 #ifdef STUDENT
-    // int status;  
+    // int status;
     if (jobs[j].state == which || which == ALL) {
       int state;
       int *statusp = Malloc(sizeof(int));
@@ -250,16 +250,18 @@ void watchjobs(int which) {
       const char *cmd = strdup(jobs[j].command);
 
       // jobstate removes FINISHED
-      if ((state = jobstate(j,statusp)) == FINISHED) {
+      if ((state = jobstate(j, statusp)) == FINISHED) {
         if (WIFEXITED(*statusp)) {
-          printf("[%d] %s '%s', status=%d\n", j, "exited", cmd, WEXITSTATUS(*statusp));   
+          printf("[%d] %s '%s', status=%d\n", j, "exited", cmd,
+                 WEXITSTATUS(*statusp));
         } else if (WIFSIGNALED(*statusp)) {
-          printf("[%d] %s '%s' by signal %d\n", j, "killed", cmd, WTERMSIG(*statusp));    
+          printf("[%d] %s '%s' by signal %d\n", j, "killed", cmd,
+                 WTERMSIG(*statusp));
         }
       } else if (state == STOPPED) {
-        printf("[%d] %s '%s'\n", j, "suspended", cmd);    
+        printf("[%d] %s '%s'\n", j, "suspended", cmd);
       } else if (state == RUNNING) {
-        printf("[%d] %s '%s'\n", j, "running", cmd);    
+        printf("[%d] %s '%s'\n", j, "running", cmd);
       }
 
       free(statusp);
@@ -277,17 +279,18 @@ int monitorjob(sigset_t *mask) {
   /* TODO: Following code requires use of Tcsetpgrp of tty_fd. */
 #ifdef STUDENT
 
-  // wait for a foreground job to finish or to be stopped, 
-  // that is all job processes finish or all stop. 
-  while ( (state=jobstate(FG, NULL)) == RUNNING ) {
-    // wait for some process to change state from running, it can only happen after sigchld_handler is run
+  // wait for a foreground job to finish or to be stopped,
+  // that is all job processes finish or all stop.
+  while ((state = jobstate(FG, NULL)) == RUNNING) {
+    // wait for some process to change state from running, it can only happen
+    // after sigchld_handler is run
     Sigsuspend(mask);
   }
   // set shell to foreground
-  setfgpgrp( getpgrp() );
+  setfgpgrp(getpgrp());
   // put back terminal attributes
   Tcsetattr(tty_fd, TCSAFLUSH, &shell_tmodes);
-  
+
   if (state == STOPPED) {
     // move job to background
     movejob(FG, allocjob());
@@ -333,29 +336,31 @@ void shutdownjobs(void) {
 
   /* TODO: Kill remaining jobs and wait for them to finish. */
 #ifdef STUDENT
-  // kill remaining jobs, wait for sigchld_handler to update the state of all of them to FINISHED
+  // kill remaining jobs, wait for sigchld_handler to update the state of all of
+  // them to FINISHED
 
-  // kill jobs 
-  for (int j=0; j<njobmax; j++) {
+  // kill jobs
+  for (int j = 0; j < njobmax; j++) {
     // job_t *job = &jobs[j];
     if (jobs[j].pgid != 0 && jobs[j].state != FINISHED)
       killjob(j);
   }
 
-  // wait for a background jobs to finish, 
+  // wait for a background jobs to finish,
   while (1) {
     // all jobs finished?
     bool bl = true;
-    for (int j=0; j<njobmax; j++) {
+    for (int j = 0; j < njobmax; j++) {
       if (jobs[j].pgid != 0 && jobs[j].state != FINISHED) {
         bl = false;
         break;
-      } 
+      }
     }
     if (bl) {
       break;
     } else {
-    // wait for some process to change state to FINISHED, it can only happen after sigchld_handler is run
+      // wait for some process to change state to FINISHED, it can only happen
+      // after sigchld_handler is run
       Sigsuspend(&mask);
     }
   }
