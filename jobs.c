@@ -228,6 +228,8 @@ bool killjob(int j) {
 #ifdef STUDENT
   job_t *job = &jobs[j];
   Kill(-job->pgid, SIGTERM);
+  // allow stopped proccesses to receive SIGTERM
+  Kill(-job->pgid, SIGCONT);
 #endif /* !STUDENT */
 
   return true;
