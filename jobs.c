@@ -31,18 +31,15 @@ static void sigchld_handler(int sig) {
   job_t *job;
   (void)pid;
 
-  // loop over all jobs
+  // loop over all jobs checking status for every process in an unfinished job
   for (int j = 0; j < njobmax; j++) {
     job = &jobs[j];
     if (job->pgid != 0) {
       // loop over all processes in a job
       for (int k = 0; k < job->nproc; k++) {
-  
-        // dprintf(STDERR_FILENO, "job=%d proc=%d", j, k);
         proc = &(job->proc[k]);
         if (proc->state != FINISHED) {
-          if ((pid = waitpid(proc->pid, &status, WNOHANG | WUNTRACED | WCONTINUED))) {
-            // dprintf(STDERR_FILENO, "job=%d proc=%d status=%d\n", j, 0, status);
+          if ((pid = waitpid(proc->pid, &status, WNOHANG | WUNTRACED))) {
 
             if (pid > 0) {
               // if terminated save status as is to be later inspected
@@ -56,9 +53,6 @@ static void sigchld_handler(int sig) {
                 proc->exitcode = status; 
               } else if (WIFSTOPPED(status)) {
                 proc->state = STOPPED;
-              // } else if (WIFCONTINUED(status)) {
-              //   // this case included for this function to be used inside watchjobs to update states
-              //   proc->state = RUNNING;
               }
             }
           }
@@ -67,11 +61,9 @@ static void sigchld_handler(int sig) {
 
         // job state changes if all processes changed state to the same state.
       int st = job->proc[0].state;
-      // dprintf(STDERR_FILENO, "job=%d proc=%d state=%d\n", j, 0, st);
       if (st != job->state) {
         // job state change is possible
         for (int m = 1; m<job->nproc; m++) {
-          // dprintf(STDERR_FILENO, "job=%d proc=%d state=%d\n", j, m, job->proc[m].state);
           if (job->proc[m].state != st) {
             // state remains unchanged
             st = job->state;
@@ -200,7 +192,7 @@ bool resumejob(int j, int bg, sigset_t *mask) {
 
     /* TODO: Continue stopped job. Possibly move job to foreground slot. */
 #ifdef STUDENT
-  // (void)movejob;
+
   // if j=-1 take last job
   j = j < 0 ? njobmax-1 : j ;
   job_t *job = &jobs[j];
@@ -341,6 +333,8 @@ void shutdownjobs(void) {
 
   /* TODO: Kill remaining jobs and wait for them to finish. */
 #ifdef STUDENT
+  // kill remaining jobs, wait for sigchld_handler to update the state of all of them to FINISHED
+
   // kill jobs 
   for (int j=0; j<njobmax; j++) {
     // job_t *job = &jobs[j];

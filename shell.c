@@ -1,6 +1,3 @@
-#include "csapp.h"
-#include <signal.h>
-#include <unistd.h>
 #ifdef READLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -34,24 +31,12 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
   for (int i = 0; i < ntokens; i++) {
     /* TODO: Handle tokens and open files as requested. */
 #ifdef STUDENT
-    // // handle redirections
-    // // Assumes valid command/pipe.
-    // if (token[i] == T_INPUT && i+1 < ntokens && token[i+1] != NULL) {
-    //   int fd = Open(token[i+1], O_RDONLY, 0);
-    //   *inputp = fd;
-    //   token[i] = mode; // for what is mode defined?
-    //   token[i+1] = NULL;
-    // if (token[i] == T_OUTPUT && i+1 < ntokens && token[i+1] != NULL) {
-    //   int fd = Open(token[i+1], O_WRONLY | O_CREAT, S_IWUSR);
-    //   *outputp = fd;
-    //   token[i] = NULL;
-    //   token[i+1] = NULL;
     
-    // Initialize n=ntokens and not 0 ;/
-    if (i == 0)
-      n = ntokens;
+    // Start from the end and consume inp/out related tokens UP TO first PIPE token. 
 
     // go backwards
+    if (i == 0)
+      n = ntokens;
     int j = ntokens - i -1;
     // Consume tokens related to redirection UP TO first appearence of pipe | operator.
     // AND! starting from the end.
@@ -63,7 +48,7 @@ static int do_redir(token_t *token, int ntokens, int *inputp, int *outputp) {
     if (token[j] == T_INPUT && j+1 < ntokens && token[j+1] != NULL) {
       int fd = Open(token[j+1], O_RDONLY, 0);
       *inputp = fd;
-      token[j] = mode; // for what is mode defined?
+      token[j] = mode; // mode=NULL
       token[j+1] = NULL;
       if (n == j+2)
         n = j;
@@ -138,9 +123,7 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     MaybeClose(&input);
     MaybeClose(&output);
 
-    // char *cmdtext[] = {"cmd"};
     int j = addjob(pid, bg);
-    // dprintf(STDERR_FILENO, "%s %s\n", token[0], token[1]);
     addproc(j, pid, token);
     if (!bg) {
       setfgpgrp(pid);
@@ -148,7 +131,6 @@ static int do_job(token_t *token, int ntokens, bool bg) {
     } else {
       setfgpgrp(getpgrp());
       dprintf(STDIN_FILENO, "[%d] running '%s'\n", j, jobcmd(j));
-      // write(STDIN_FILENO, "running sth\n", 12);
     }
 
   }
@@ -243,51 +225,53 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   /* TODO: Start pipeline subprocesses, create a job and monitor it.
    * Remember to close unused pipe ends! */
 #ifdef STUDENT
+  
+  // Here I traverse the token list starting from the end and creating processes.
+  // This turned out to be a bad idea as the job command and proc list was created backwards.
+  // I decided on a hack: store pids in a list and run addproc in a seperate loop after the main loop.
 
   int next_output;
-
   int *pid_list = Malloc(sizeof(int));
   int pid_n = 0;
 
-  // start with some process
+  // start with some process (the last in pipeline)
   int i = ntokens-1;
+  // traverse up to previous T_PIPE token.
   for (; i>0 && token[i] != T_PIPE;i--) {;}
   pgid = do_stage(0, &mask, next_input, -1, &token[i+1], ntokens-i-1, bg);
   next_output = output;
   job = addjob(pgid, bg);
   token[i] = NULL;
 
-  // addproc(job, pgid, &token[i+1]);
   // save pid to later call addproc
   pid_list[pid_n] = pgid;
   pid_n += 1;
   pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
   
 
-  // continue with the rest
+  // continue with the rest of processes
   while (1) {
     int j = i;
   
+    // traverse up to previous T_PIPE token or begining.
     for (; i>0 && token[i] != T_PIPE;i--) {;}
-    // here we go to i=-1 and try token[-1]
     if (token[i] == T_PIPE) {
     
       mkpipe(&input, &output);
-    
       pid = do_stage(pgid, &mask, input, next_output, &token[i+1], j-i-1, bg);
-    
       next_output = output;
-      // addproc(job, pid, &token[i+1]);    
+  
       // save pid to later call addproc
       pid_list[pid_n] = pid;
       pid_n += 1;
       pid_list = Realloc(pid_list, sizeof(int) * (pid_n + 1));
-    
 
+      // mark seperation
       token[i] = NULL;
+
     } else { // i = 0
       pid = do_stage(pgid, &mask, -1, next_output, token, j, bg);
-      // addproc(job, pid, token);
+
       // save pid to later call addproc
       pid_list[pid_n] = pid;
       pid_n += 1;
@@ -303,7 +287,7 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
   token_t *start = token;
   for (int l=0; l < pid_n; l++) {
     addproc(job, pid_list[pid_n-l-1], start);
-    // addproc(job, pid, start);
+
     // loop to next cmd
     if (l+1 < pid_n) {
       for (; *start; start++) {}
@@ -317,30 +301,9 @@ static int do_pipeline(token_t *token, int ntokens, bool bg) {
     setfgpgrp(pgid);
     monitorjob(&mask);
   } else {
-    // przezorny zawsze ubezpieczony
     setfgpgrp(getpgrp());
     dprintf(STDIN_FILENO, "[%d] running '%s'\n", job, jobcmd(job));
-  }
-
-  // int i = 0;
-  // while (i < ntokens) {
-  //   // create process command
-  //   token_t *newtoken = Malloc(sizeof(token_t));
-  //   int j=0;
-  //   while (i < ntokens && token[i] != T_PIPE) {
-
-  //     // iterate up to next T_PIPE, compact a command into newtoken
-  //     for (int i = 0; token[i] != T_PIPE && i < ntokens; i++) {
-  //       if (token[i] != NULL) {
-  //         newtoken[j] = token[i];
-  //         Realloc(newtoken, sizeof(token_t) * (j+1));
-  //         j = j+1;
-  //       }
-  //     }
-  //     newtoken[j] = NULL;
-  //   }
-  // }
-  
+  }  
 
 #endif /* !STUDENT */
 

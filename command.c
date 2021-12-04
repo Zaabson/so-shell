@@ -1,4 +1,3 @@
-#include "csapp.h"
 #include "shell.h"
 
 typedef int (*func_t)(char **argv);
@@ -129,6 +128,7 @@ noreturn void external_command(char **argv) {
       }
     path = path + tosep + 1;
   }
+  
 #endif /* !STUDENT */
   } else {
     (void)execve(argv[0], argv, environ);
